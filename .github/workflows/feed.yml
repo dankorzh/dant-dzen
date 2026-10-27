@@ -1,0 +1,25 @@
+name: RSS для Дзена
+on:
+  schedule:
+    - cron: '17 * * * *'   # каждый час
+  workflow_dispatch: {}
+permissions:
+  contents: write
+concurrency: feed
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python build_feed.py
+        env:
+          TILDA_MCP_KEY: ${{ secrets.TILDA_MCP_KEY }}
+      - name: Сохранить ленту
+        run: |
+          git config user.name "dzen-feed-bot"
+          git config user.email "dzen-feed-bot@users.noreply.github.com"
+          git add docs/dzen.xml state.json
+          git diff --cached --quiet || (git commit -m "Обновление ленты для Дзена" && git push)
