@@ -101,6 +101,13 @@ def article(t,page,settings):
     return dict(title=title,link=link,hero=c.imgs[0] if c.imgs else '',descr=(settings.get('descr') or settings.get('meta_descr') or '').strip(),
                 body=body,chars=len(strip(body)))
 
+def first_img_only(body):
+    """В Дзен уходит только первое фото статьи (главный экран), остальные убираем."""
+    n=[0]
+    def keep(m):
+        n[0]+=1; return m.group(0) if n[0]==1 else ''
+    return re.sub(r'<img [^>]*>',keep,body)
+
 def main():
     st=json.load(open(STATE)); st.setdefault('items',{})
     t=Tilda(os.environ['TILDA_MCP_KEY'])
@@ -133,7 +140,7 @@ def main():
         cats=(['native-draft'] if it['draft'] else [])+['format-article','index','comment-all']
         x.append('<item><title>%s</title><link>%s</link><guid>%s</guid><pubDate>%s</pubDate><media:rating scheme="urn:simple">nonadult</media:rating>%s'
                  '<enclosure url="%s" type="image/jpeg"/><description><![CDATA[%s]]></description><content:encoded><![CDATA[%s]]></content:encoded></item>'
-                 %(html.escape(it['title']),it['link'],it['link'],it['date'],''.join('<category>%s</category>'%c for c in cats),it['hero'],it['descr'],it['body']))
+                 %(html.escape(it['title']),it['link'],it['link'],it['date'],''.join('<category>%s</category>'%c for c in cats),it['hero'],it['descr'],first_img_only(it['body'])))
     x.append('</channel></rss>')
     os.makedirs(os.path.dirname(OUT),exist_ok=True); new='\n'.join(x)
     if not os.path.exists(OUT) or open(OUT).read()!=new: open(OUT,'w').write(new); changed=True
