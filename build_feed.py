@@ -101,6 +101,27 @@ def article(t,page,settings):
     return dict(title=title,link=link,hero=c.imgs[0] if c.imgs else '',descr=(settings.get('descr') or settings.get('meta_descr') or '').strip(),
                 body=body,chars=len(strip(body)))
 
+BLOG_PAGE=59376523; CATALOG_RID=5187716901   # страница /blog и блок «Все статьи по темам»
+SECTIONS=[('Полезно знать',r'вычет|налог|документ'),('Имплантация зубов',r'имплант'),('Протезирование',r'протез|корон|мост'),('Исправление прикуса',r'прикус|брекет|элайнер|ретейнер|капп'),
+ ('Виниры и эстетика',r'винир|эстет'),('Отбеливание',r'отбел'),('Удаление зубов',r'удален|мудр'),('Диагностика',r'снимок|рентген|диагност|\bкт\b'),
+ ('Гигиена и профилактика',r'гигиен|чистк|дёсн|десн|запах|налёт|налет|щётк|щетк|профилакт'),
+ ('Лечение зубов',r'лечен|кариес|пломб|пульпит|флюс|канал|зуб болит|боль|чувствител|эмал|крош|шата')]
+def add_to_catalog(t,a):
+    """Добавляет новую статью первой в подходящий раздел блока «Все статьи по темам» и публикует /blog."""
+    code=t.call('edit_record',pageid=BLOG_PAGE,recordid=CATALOG_RID,projectid=P,tab='content')['record']['code']
+    href=a['link'].replace(SITE,'')
+    if 'href="%s"'%href in code: return False
+    low=a['title'].lower(); name=next((n for n,rx in SECTIONS if re.search(rx,low)),'Полезно знать')
+    m=re.search(r'<summary>%s<small>(\d+)</small></summary><ul>'%re.escape(name),code)
+    if not m: m=re.search(r'<summary>Полезно знать<small>(\d+)</small></summary><ul>',code)
+    if not m: print('catalog: раздел не найден'); return False
+    li='<li><a href="%s"><img src="%s" alt="" loading="lazy"><span>%s</span></a></li>'%(href,a['hero'],html.escape(a['title']))
+    head=m.group(0).replace('<small>%s<'%m.group(1),'<small>%d<'%(int(m.group(1))+1))
+    code=code[:m.start()]+head+li+code[m.end():]
+    code=re.sub(r'<p>(\d+) статей',lambda x:'<p>%d статей'%(int(x.group(1))+1),code,count=1)
+    t.call('update_record',pageid=BLOG_PAGE,recordid=CATALOG_RID,projectid=P,tab='content',only_field='code',fields={'code':code})
+    t.call('publish_page',pageid=BLOG_PAGE,projectid=P); print('catalog: добавлена в «%s»'%name,a['link']); return True
+
 def first_img_only(body):
     """В Дзен уходит только первое фото статьи (главный экран), остальные убираем."""
     n=[0]
@@ -130,6 +151,9 @@ def main():
                  date=(old or {}).get('date') or format_datetime(datetime.fromtimestamp(pub or time.time(),TZ)),
                  first_seen=(old or {}).get('first_seen') or int(time.time()))
         st['items'][slug]=a; changed=True; print('item',slug,a['chars'],'зн.')
+        if not old and slug not in want:
+            try: add_to_catalog(t,a)
+            except Exception as e: print('catalog error',slug,e)
     for slug in list(st['items']):
         if slug not in blog and slug not in want: del st['items'][slug]; changed=True; print('removed',slug)
     items=sorted(st['items'].values(),key=lambda x:x['first_seen'],reverse=True)[:MAX_ITEMS]
